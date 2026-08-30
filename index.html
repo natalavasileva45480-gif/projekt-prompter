@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Генератор промптов для PBL-проектов</title>
+
+<!-- ЗАЩИТА ОТ ЛОКАЛЬНОГО ЗАПУСКА -->
+<script>
+  if (window.location.protocol === 'file:') {
+      document.body.innerHTML = `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; margin-top: 20vh; background: #fff; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+              <h1 style="color: #ff3333; font-size: 28px; margin-bottom: 20px;">⛔ Доступ заблокирован</h1>
+              <p style="color: #666; font-size: 18px; max-width: 600px; line-height: 1.5;">Использование локальной копии этого генератора запрещено авторскими правами.</p>
+              <p style="font-size: 14px; color: #999; margin-top: 15px;">Пожалуйста, используйте официальную версию генератора в интернете.</p>
+          </div>
+      `;
+      document.documentElement.style.overflow = 'hidden'; // Блокируем прокрутку
+      throw new Error("Запуск локальной копии заблокирован.");
+  }
+</script>
+<!-- КОНЕЦ ЗАЩИТЫ -->
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+    color: #2d3748;
+  }
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    overflow: hidden;
+  }
+  header {
+    background: linear-gradient(135deg, #4c51bf, #6b46c1);
+    color: #fff;
+    padding: 30px;
+    text-align: center;
+  }
+  header h1 { font-size: 1.8rem; margin-bottom: 8px; }
+  header p { opacity: 0.9; font-size: 0.95rem; }
+  form { padding: 30px; }
+  .field { margin-bottom: 22px; }
+  .field label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #4a5568;
+    font-size: 0.95rem;
+  }
+  .field label .hint {
+    font-weight: 400;
+    color: #718096;
+    font-size: 0.85rem;
+  }
+  select, textarea, input[type="text"] {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    transition: border-color 0.2s;
+    background: #fff;
+  }
+  select:focus, textarea:focus, input[type="text"]:focus {
+    outline: none;
+    border-color: #6b46c1;
+  }
+  select[multiple] { min-height: 110px; }
+  textarea { resize: vertical; min-height: 80px; }
+  .checkbox-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+    padding: 12px;
+    background: #f7fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+  }
+  .checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 400;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background 0.2s;
+  }
+  .checkbox-group label:hover { background: #edf2f7; }
+  .checkbox-group input { width: auto; cursor: pointer; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+  .actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+  }
+  button {
+    flex: 1;
+    min-width: 160px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.2s;
+    font-family: inherit;
+  }
+  button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  button:active { transform: translateY(0); }
+  .btn-primary { background: linear-gradient(135deg, #4c51bf, #6b46c1); color: #fff; }
+  .btn-secondary { background: #edf2f7; color: #4a5568; }
+  .btn-copy { background: #48bb78; color: #fff; }
+  .output {
+    padding: 30px;
+    background: #f7fafc;
+    border-top: 1px solid #e2e8f0;
+    display: none;
+  }
+  .output.visible { display: block; }
+  .output h2 {
+    font-size: 1.2rem;
+    margin-bottom: 12px;
+    color: #2d3748;
+  }
+  .prompt-text {
+    background: #fff;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 16px;
+    font-family: "Consolas", "Monaco", monospace;
+    font-size: 0.9rem;
+    white-space: pre-wrap;
+    line-height: 1.6;
+    max-height: 400px;
+    overflow-y: auto;
+    color: #2d3748;
+  }
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: #2d3748;
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 8px;
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 1000;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>🎓 Генератор промптов для PBL-проектов</h1>
+    <p>Создание педагогически обоснованных тем учебных проектов с учётом локального контекста</p>
+  </header>
+
+  <form id="promptForm">
+    <div class="row">
+      <div class="field">
+        <label>Класс / возраст учащихся</label>
+        <select id="grade">
+          <optgroup label="Начальная школа">
+            <option value="1 класс / 7 лет">1 класс / 7 лет</option>
+            <option value="2 класс / 8 лет">2 класс / 8 лет</option>
+            <option value="3 класс / 9 лет">3 класс / 9 лет</option>
+            <option value="4 класс / 10 лет">4 класс / 10 лет</option>
+          </optgroup>
+          <optgroup label="Основная школа">
+            <option value="5 класс / 11 лет">5 класс / 11 лет</option>
+            <option value="6 класс / 12 лет">6 класс / 12 лет</option>
+            <option value="7 класс / 13 лет" selected>7 класс / 13 лет</option>
+            <option value="8 класс / 14 лет">8 класс / 14 лет</option>
+            <option value="9 класс / 15 лет">9 класс / 15 лет</option>
+          </optgroup>
+          <optgroup label="Старшая школа">
+            <option value="10 класс / 16 лет">10 класс / 16 лет</option>
+            <option value="11 класс / 17 лет">11 класс / 17 лет</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Длительность проекта</label>
+        <select id="duration">
+          <option value="1 урок (45 минут)">1 урок (45 минут)</option>
+          <option value="2–3 урока">2–3 урока</option>
+          <option value="1 неделя">1 неделя</option>
+          <option value="2 недели" selected>2 недели</option>
+          <option value="1 месяц">1 месяц</option>
+          <option value="1 четверть">1 четверть</option>
+          <option value="полугодие">Полугодие</option>
+          <option value="учебный год">Учебный год</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Предмет(ы) / область <span class="hint">(Ctrl/Cmd для множественного выбора)</span></label>
+      <select id="subjects" multiple>
+        <option value="математика">Математика</option>
+        <option value="алгебра">Алгебра</option>
+        <option value="геометрия">Геометрия</option>
+        <option value="информатика">Информатика</option>
+        <option value="русский язык">Русский язык</option>
+        <option value="литература">Литература</option>
+        <option value="иностранный язык">Иностранный язык</option>
+        <option value="биология">Биология</option>
+        <option value="экология">Экология</option>
+        <option value="география">География</option>
+        <option value="история">История</option>
+        <option value="обществознание">Обществознание</option>
+        <option value="физика">Физика</option>
+        <option value="химия">Химия</option>
+        <option value="ОБЖ">ОБЖ</option>
+        <option value="технология">Технология</option>
+        <option value="ИЗО">ИЗО / искусство</option>
+        <option value="музыка">Музыка</option>
+        <option value="физкультура">Физкультура</option>
+        <option value="междисциплинарный" selected>Междисциплинарный</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>Тип поселения</label>
+        <select id="settlement">
+          <option value="мегаполис (город-миллионник)">Мегаполис</option>
+          <option value="крупный город" selected>Крупный город</option>
+          <option value="средний город">Средний город</option>
+          <option value="малый город">Малый город</option>
+          <option value="посёлок городского типа">ПГТ</option>
+          <option value="село">Село</option>
+          <option value="деревня">Деревня</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Количество вариантов (N)</label>
+        <select id="count">
+          <option value="3">3</option>
+          <option value="5" selected>5</option>
+          <option value="7">7</option>
+          <option value="10">10</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Локальный контекст <span class="hint">(регион, особенности, проблемы, ресурсы)</span></label>
+      <textarea id="context" placeholder="Например: город на Волге, промышленный регион, проблемы с качеством воздуха, рядом заповедник, развито машиностроение, есть краеведческий музей..."></textarea>
+    </div>
+
+    <div class="field">
+      <label>Доступные ресурсы <span class="hint">(отметьте всё подходящее)</span></label>
+      <div class="checkbox-group" id="resources">
+        <label><input type="checkbox" value="лаборатория"> Лаборатория</label>
+        <label><input type="checkbox" value="ИТ-оборудование (компьютеры, планшеты)" checked> ИТ-оборудование</label>
+        <label><input type="checkbox" value="транспорт для выездов"> Транспорт</label>
+        <label><input type="checkbox" value="небольшой бюджет на материалы"> Бюджет</label>
+        <label><input type="checkbox" value="связь с местными организациями" checked> Связь с организациями</label>
+        <label><input type="checkbox" value="волонтёры / родители"> Волонтёры</label>
+        <label><input type="checkbox" value="интернет и соцсети"> Интернет / соцсети</label>
+        <label><input type="checkbox" value="3D-принтер / мастерская"> Мастерская / 3D-принтер</label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Ключевые образовательные цели <span class="hint">(отметьте всё подходящее)</span></label>
+      <div class="checkbox-group" id="goals">
+        <label><input type="checkbox" value="развитие исследовательских навыков" checked> Исследовательские навыки</label>
+        <label><input type="checkbox" value="работа в команде" checked> Работа в команде</label>
+        <label><input type="checkbox" value="применение теории на практике" checked> Применение теории</label>
+        <label><input type="checkbox" value="гражданская активность"> Гражданская активность</label>
+        <label><input type="checkbox" value="цифровая грамотность"> Цифровая грамотность</label>
+        <label><input type="checkbox" value="креативность и дизайн-мышление"> Креативность</label>
+        <label><input type="checkbox" value="коммуникация и публичные выступления"> Коммуникация</label>
+        <label><input type="checkbox" value="критическое мышление"> Критическое мышление</label>
+        <label><input type="checkbox" value="финансовая грамотность"> Финансовая грамотность</label>
+        <label><input type="checkbox" value="экологическое сознание"> Экологическое сознание</label>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="btn-secondary" onclick="resetForm()">↺ Сбросить</button>
+      <button type="button" class="btn-primary" onclick="generatePrompt()">✨ Сгенерировать промпт</button>
+    </div>
+  </form>
+
+  <div class="output" id="output">
+    <h2>📋 Готовый промпт</h2>
+    <div class="prompt-text" id="promptText"></div>
+    <div class="actions">
+      <button type="button" class="btn-copy" onclick="copyPrompt()">📎 Копировать</button>
+      <button type="button" class="btn-secondary" onclick="downloadPrompt()">💾 Скачать .txt</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Скопировано в буфер обмена ✓</div>
+
+<script>
+function getCheckedValues(containerId) {
+  return Array.from(document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`))
+    .map(cb => cb.value);
+}
+
+function generatePrompt() {
+  const grade = document.getElementById('grade').value;
+  const duration = document.getElementById('duration').value;
+  const subjects = Array.from(document.getElementById('subjects').selectedOptions).map(o => o.value);
+  const settlement = document.getElementById('settlement').value;
+  const context = document.getElementById('context').value.trim();
+  const resources = getCheckedValues('resources');
+  const goals = getCheckedValues('goals');
+  const count = document.getElementById('count').value;
+
+  if (subjects.length === 0) {
+    alert('Выберите хотя бы один предмет');
+    return;
+  }
+  if (resources.length === 0) {
+    alert('Отметьте хотя бы один ресурс');
+    return;
+  }
+  if (goals.length === 0) {
+    alert('Отметьте хотя бы одну цель');
+    return;
+  }
+
+  const subjectsStr = subjects.join(' + ');
+  const resourcesStr = resources.join(', ');
+  const goalsStr = goals.join(', ');
+  const contextStr = context
+    ? `${settlement}, ${context}`
+    : `${settlement} [предположение: типичные для региона особенности]`;
+
+  const prompt = `Ты — опытный методист и специалист по проектному обучению (PBL). Твоя задача — сгенерировать реалистичные, педагогически обоснованные темы учебных проектов для школьников с обязательной интеграцией локального контекста.
+
+📥 ВХОДНЫЕ ДАННЫЕ:
+• Класс/возраст учащихся: ${grade}
+• Предмет(ы) / область: ${subjectsStr}
+• Локальный контекст: ${contextStr}
+• Длительность проекта: ${duration}
+• Доступные ресурсы: ${resourcesStr}
+• Ключевые образовательные цели: ${goalsStr}
+
+📤 ФОРМАТ ВЫВОДА (для каждой темы укажи строго по пунктам):
+1. Название проекта
+2. Связь с локальным контекстом (почему это релевантно именно для нашего региона/сообщества)
+3. Центральный исследовательский вопрос
+4. Этапы реализации (кратко: старт → исследование/сбор данных → создание продукта → презентация/рефлексия)
+5. Возможный конечный продукт (формат: отчёт, интерактивная карта, подкаст, макет, сайт, социальная акция и т.д.)
+6. Местные партнёры/эксперты (конкретные типы организаций или ролей, которых можно привлечь)
+7. Критерии оценивания (3–4 ключевых показателя, соответствующих целям)
+8. Потенциальные риски и меры безопасности/этики (если применимо: работа на улице, опросы, данные, взаимодействие с людьми)
+
+⚙️ ТРЕБОВАНИЯ К ГЕНЕРАЦИИ:
+• Сгенерируй ${count} вариантов.
+• Темы должны быть возраст-адекватными, реалистичными по ресурсам и времени, поощрять самостоятельность, командную работу и рефлексию.
+• Избегай абстрактных или оторванных от жизни формулировок. Каждая тема должна чётко показывать, как ученики взаимодействуют с местной средой или сообществом.
+• Если каких-то данных не хватает, сделай обоснованные педагогические предположения и пометь их как [предположение].
+• Язык: русский. Стиль: профессионально-педагогический, конкретный, без воды.
+
+Начни ответ с краткого подтверждения входных параметров, затем перейди к нумерованному списку тем.`;
+
+  document.getElementById('promptText').textContent = prompt;
+  document.getElementById('output').classList.add('visible');
+  document.getElementById('output').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function copyPrompt() {
+  const text = document.getElementById('promptText').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('Скопировано в буфер обмена ✓');
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('Скопировано ✓');
+  });
+}
+
+function downloadPrompt() {
+  const text = document.getElementById('promptText').textContent;
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pbl-prompt-${Date.now()}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Файл скачан ✓');
+}
+
+function resetForm() {
+  if (confirm('Сбросить все поля к значениям по умолчанию?')) {
+    location.reload();
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+</script>
+</body>
+</html>
